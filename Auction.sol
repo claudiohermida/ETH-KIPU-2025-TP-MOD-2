@@ -243,7 +243,7 @@ contract Auction {
           bidders[_currentBidder].deposit = 0;
           (bool sent,  ) =  _currentBidder.call{value: _amountToReturn}("");
           require(sent, string(abi.encodePacked("failed to refund ", _amountToReturn," to ", _currentBidder)));
-      };
+      }
       emit AuctionEnded();
   } // function returnDeposits
 
