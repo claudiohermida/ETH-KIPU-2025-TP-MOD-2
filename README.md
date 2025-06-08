@@ -16,3 +16,12 @@ Auction contrat showcasing basic data structures.
 - we use an iterable mapping `mapping (address => Bidder)` to record a bidder´s current offer and total deposited (to calculate refunds).
 - we build an array `BidderToDisplay[]` with pairs `(bidderAddress, offer)` to show the list of current bidders and their offers, build upon iteration over the keys array `biddersAddresses`.
   
+- `highestBid` holds initially the starting bid set by the contract deployer (`owner`). After the first bid is placed, it holds the highest offer. The following #invariabt holds:
+  ```
+  (biddersAddresses.length > 0) ==>
+             [highestBid == bidders[highestBidder].offer
+             && forall address. (highestBid >= bidders[address].offer
+                                && bidders[address].deposit >= bidders[address].offer)
+             && address(this).balance >= highestBid]
+     
+  
