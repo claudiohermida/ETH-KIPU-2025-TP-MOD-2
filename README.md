@@ -13,7 +13,11 @@ Auction contrat showcasing basic data structures.
 
 # Dev notes:
 - we use the pattern Iterable Mapping (https://edp.ethkipu.org/modulo-3/estandares-librerias-y-patrones/patrones-de-diseno  item 9), consisting of a `mapping (Key => Value) map` and an associated array `Keys[] keys` to iterate over the `(keys[i],map[keys[i]])` pairs.
-- we use an iterable mapping `mapping (address => Bidder)` to record a bidder´s current offer and total deposited (to calculate refunds).
+- we use an iterable mapping `mapping (address => Bidder)` to record a bidder´s current offer and total deposited (to calculate refunds). The following invariant relates `bidders` mapping and `biddersAddresses` array:
+  ```
+   forall address.
+      bidders[address].exists <==> Exists i < biddersAddresses.length.   biddersAddresses[i] == address
+  ```
 - we build an array `BidderToDisplay[]` with pairs `(bidderAddress, offer)` to show the list of current bidders and their offers, build upon iteration over the keys array `biddersAddresses`.
   
 - `highestBid` holds initially the starting bid set by the contract deployer (`owner`). After the first bid is placed, it holds the highest offer. The following #invariabt holds:
@@ -21,7 +25,6 @@ Auction contrat showcasing basic data structures.
   (biddersAddresses.length > 0) ==>
              [highestBid == bidders[highestBidder].offer
              && forall address. (highestBid >= bidders[address].offer
-                                && bidders[address].deposit >= bidders[address].offer)
+                && activeAuction ==>  bidders[address].deposit >= bidders[address].offer)
              && address(this).balance >= highestBid]
-     
-  
+  ```
