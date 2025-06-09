@@ -20,7 +20,7 @@ Auction contrat showcasing basic data structures.
   ```
 - we build an array `BidderToDisplay[]` with pairs `(bidderAddress, offer)` to show the list of current bidders and their offers, build upon iteration over the keys array `biddersAddresses`.
   
-- `highestBid` holds initially the starting bid set by the contract deployer (`owner`). After the first bid is placed, it holds the highest offer. The following #invariabt holds:
+- `highestBid` holds initially the starting bid set by the contract deployer (`owner`). After the first bid is placed, it holds the highest offer. The following invariant holds:
   ```
   (biddersAddresses.length > 0) ==>
              [highestBid == bidders[highestBidder].offer
