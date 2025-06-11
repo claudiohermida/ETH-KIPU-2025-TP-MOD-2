@@ -19,7 +19,7 @@ contract Auction {
    * @field exists: flag indicating whether this bidder has made an offer yet, as per Iterable Mapping
    */
   struct Bidder {
-    uint256 offer;
+    uint256 highestOffer;
     uint256 deposit;
     bool exists;
   }
@@ -29,8 +29,8 @@ contract Auction {
    * @field address: bidder´s address
    * @field offer:  the current offer from bidder
    */
-  struct BidderToDisplay {
-    address bidderAddress;
+  struct Bid {
+    address bidder;
     uint256 offer;
   }
 
@@ -96,6 +96,12 @@ contract Auction {
   address public immutable owner;
 
   /**
+   * @notice flag to pause/unpause contract, only modifiable by owner
+   * controls access to emergencyWithdrawal, bid, partialRefund, returnDeposits
+   */
+   bool private _paused,
+
+  /**
    * @notice deadline for placing bids, 
    * initially set in the constructor at time of deployment
    * incremented by 10 min  whenever a new bid is made within the last 10 min remaining
@@ -118,27 +124,55 @@ contract Auction {
     * @notice address of the bidder with the current highest bid
     * bidders[highestBidder].offer is the current highest bid
     */
-  address public highestBidder;
+   // address public highestBidder;
+
+
+   /**
+    * @notice holds the successive bids (bidder,offer) 
+    * @dev for all 0 <= i <= bids.length-1. bids[i + 1].offer >= (bids[i].offer * 100 + BID_INCREASE)/100
+    * @dev bids[bids.length-1].bidder is the current highest bidder
+    * @dev bids[bids.length-1].offer is the current highest offer
+    */
+    Bid[] public bids;
 
    /**
     * @notice the current highest bid
     * initialized in the constructor upon contract deployment to set a minimum starting bid
-    * afterwards, it should agree with  bidders[highestBidder].offer
+    * afterwards, it should agree with  bidders[highestBidder].highestOffer and bids[bids.length - 1].offer
     */
-  uint256 public highestBid;
+   uint256 public highestBid;
 
 
 
   /*///////////////////////////////////////////////////////////////
                           MODIFIERS
   //////////////////////////////////////////////////////////////*/
+  // Ownable pattern
   /**
    * @notice Reverts in case the function was not called by the owner of the contract
    */
   modifier onlyOwner() {
-     require(msg.sender == owner , "only contract owner may invoke this function");
+     require(msg.sender == owner , "only owner");
      _;
   }
+
+  // Pausable pattern
+  /**
+   * @notice reverts if contract is not paused
+   */
+  modifier whenPaused() {
+        require(paused, "contract is not paused");
+        _;
+    }
+
+   /**
+   * @notice reverts if contract is not paused
+   */
+  modifier whenNotPaused() {
+        require(!paused, "contract is paused");
+        _;
+    }
+
 
   /**
    * @notice Reverts in case the function is called after the auction´s end
@@ -177,14 +211,15 @@ contract Auction {
    * reverts if bid should surpass highestBid by BID_INCREASE %
    * or if auction is no longer active
    */
-  function bid() external payable activeAuction {
+  function bid() external payable activeAuction whenNotPaused {
       require(msg.value > ((highestBid * (100 + BID_INCREASE))/100),
-      "bid does not surpass current highest bid by specified bid increase");
+      "does not surpass bid increase");
       highestBid = msg.value; // update highest bid
       _addBidder(msg.sender); // add bidder as existing and update biddersAddresses array
-      highestBidder = msg.sender; // record new highest bidder address
-      bidders[msg.sender].offer = msg.value; // register new offer
+      //  highestBidder = msg.sender;
+      bidders[msg.sender].highestOffer = msg.value; // register new highest offer
       bidders[msg.sender].deposit += msg.value; // update deposit from bidder
+      bids.push(Bid(msg.sender,msg.value)); // update bids array with new bid at the end
       _updateDeadline(); // update deadline if necessary
       emit NewOffer(msg.sender,msg.value);
   } // function bid
@@ -195,28 +230,19 @@ contract Auction {
    * reverts if there are no bids
    */
   function revealWinner() external view auctionEnded returns (address, uint256){
-      if (highestBidder != address(0))
-          {return (highestBidder, highestBid);}
+      uint256 numberOfBids = bids.length;
+      if (numberOfBids > 0))
+          {return (bids[numberOfBids - 1].bidder, highestBid);}
       else {revert  NoBidsMade();}
-  } // fucntion revealWinner
+  } // function revealWinner
 
    /**
     * @notice shows current list of bidders, displaying their addresses and highest offers.
     * @return biddersToDisplay_ array of BidderToDisplay(bidderAdress,bidderOffer)
     */
-   function showOffers() external view returns (BidderToDisplay[] memory) {
-    uint256 len = biddersAddresses.length;
-    BidderToDisplay[] memory biddersToDisplay_ = new BidderToDisplay[](len);
-
-    for (uint256 i = 0; i < len; i++) { 
-        address bidAddress = biddersAddresses[i];
-        biddersToDisplay_[i] = BidderToDisplay({
-            bidderAddress: bidAddress,
-            offer: bidders[bidAddress].offer
-        });
-    }
-    return biddersToDisplay_; // Return the populated array
-}
+   function showOffers() external view returns (Bid[] memory){ 
+    return bids; // Return the bids array
+   } // function showOffers
 
 
 
@@ -226,13 +252,14 @@ contract Auction {
     * reverts if called by any but the registered owner
     * reverts if the auction has not reached its deadline
     */
-  function returnDeposits() external onlyOwner auctionEnded {
-      uint256 len = biddersAddresses.length;
-      for(uint256 i = 0; i < len; i++){
-          uint256 _amountToReturn = 0;
+  function returnDeposits() external onlyOwner auctionEnded whenNotPaused {
+      uint256 numberOfBidders = biddersAddresses.length;
+      uint256 _amountToReturn;
+      // highestBidder == bids[bids.length-1].bidder
+      for(uint256 i = 0; i < numnberOfBidders; i++){
           address _currentBidder = biddersAddresses[i];
-          if (_currentBidder != highestBidder){
-              bidders[_currentBidder].offer = 0;
+          if (_currentBidder != bids[bids.length-1].bidder){
+              bidders[_currentBidder].highestOffer = 0;
               // return deposit - discount.
               _amountToReturn = bidders[ _currentBidder].deposit;
           } else {
@@ -242,8 +269,12 @@ contract Auction {
           _amountToReturn = (_amountToReturn * (100- RETURN_DEPOSIT_DISCOUNT))/ 100;
           bidders[_currentBidder].deposit = 0;
           (bool sent,  ) =  _currentBidder.call{value: _amountToReturn}("");
-          require(sent, string(abi.encodePacked("failed to refund ", _amountToReturn," to ", _currentBidder)));
+          require(sent, "failed to refund");
       }
+       // transfer remaining balance to contract owner (== msg.sender)
+      uint256 balance = address(this).balance;
+      (bool sent, ) = msg.sender.call{value: balance}("");
+      require(sent, "Withdrawal failed");
       emit AuctionEnded();
   } // function returnDeposits
 
@@ -251,16 +282,32 @@ contract Auction {
     * @notice refunds excess deposit, over the bidder's current highest offer
     * reverts if auction has ended
     */
-  function partialRefund() external activeAuction {
-      address  _claimer = msg.sender;
-      uint256  _excess = bidders[_claimer].deposit - bidders[_claimer].offer;
+  function partialRefund() external activeAuction whenNotPaused {
+      uint256  _excess = bidders[msg.sender].deposit - bidders[msg.sender].highestOffer;
       if (_excess > 0) {
-          bidders[_claimer].deposit -= _excess;
-          (bool sent, ) = _claimer.call{value: _excess}("");
-          require(sent, string(abi.encodePacked("failed to refund ", _excess, " to ", _claimer)));
+          bidders[msg.sender].deposit -= _excess;
+          (bool sent, ) = msg.sender.call{value: _excess}("");
+          require(sent, "failed to refund ");
       }
-      
   } // function partialRefund
+
+
+
+    /*///////////////////////////////////////////////////////////////
+                         EMERGENCY FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+
+    /** @notice emergency withdrawal function
+     * withdraws all funds of the contract to the owner´s account
+     * callable only when the contract has been paused
+     */
+    function emergencyWithdrawal() external onlyOwner whenPaused {
+        uint256 balance = address(this).balance;
+        (bool success, ) = msg.sender.call{value: balance}("");
+        require(success, "Withdrawal failed");
+    }
+
 
   /*///////////////////////////////////////////////////////////////
                            HELPER FUNCTIONS
@@ -273,7 +320,7 @@ contract Auction {
       if (block.timestamp + DEADLINE_EXTENSION > deadline){
           deadline += DEADLINE_EXTENSION;
       }
-  }
+  } // function _updateDeadline
 
 
    /**
@@ -286,8 +333,34 @@ contract Auction {
           bidders[_bidder].exists = true;
           biddersAddresses.push(_bidder);
       }
+  } // function _addBidder
+
+  // from Pausable pattern
+  // Function to pause/unpause the contract
+  /**
+    * @notice pauses/unpauses the contract at owner´s decision
+    */
+  function togglePause() external onlyOwner {
+        paused = !paused;
   }
+
   
 
 
 } // contract Auction
+
+
+ /*///////////////////////////////////////////////////////////////
+                     CHANGES
+ //////////////////////////////////////////////////////////////*/
+// - short strings in require messages
+// - added withdrawal of remaining funds to owner at the end of refundDeposits()
+// - added emergencyWithdrawal
+// - implmented Pausable pattern, to enable emergencyWithdrawal(): functions which manipulate funds are only callable when not paused
+// - incorporated modifiers whenPaused, whenNotPaused and function togglePause related to Pausable pattern
+// - use "dirty variables" in loops
+// - renamed struct BidToDisplay to Bid, simpler and more descriptive
+// - incorported array bids to record all bids, in chronological order
+// - eliminated variable highestBidder, which is now recoverable from the last element of bids.
+// - modified revealWinner() and showOffers() according to the new data structuring
+
