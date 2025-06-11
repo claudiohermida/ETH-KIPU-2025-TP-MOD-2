@@ -99,7 +99,7 @@ contract Auction {
    * @notice flag to pause/unpause contract, only modifiable by owner
    * controls access to emergencyWithdrawal, bid, partialRefund, returnDeposits
    */
-   bool private _paused,
+   bool private _paused;
 
   /**
    * @notice deadline for placing bids, 
@@ -161,7 +161,7 @@ contract Auction {
    * @notice reverts if contract is not paused
    */
   modifier whenPaused() {
-        require(paused, "contract is not paused");
+        require(_paused, "contract is not paused");
         _;
     }
 
@@ -169,7 +169,7 @@ contract Auction {
    * @notice reverts if contract is not paused
    */
   modifier whenNotPaused() {
-        require(!paused, "contract is paused");
+        require(!_paused, "contract is paused");
         _;
     }
 
@@ -202,6 +202,7 @@ contract Auction {
   constructor (uint256 _startingBid, uint256 _duration){
       deadline = block.timestamp + _duration;
       owner = msg.sender;
+      _paused = false;
       highestBid = _startingBid;
   }
   
@@ -212,7 +213,7 @@ contract Auction {
    * or if auction is no longer active
    */
   function bid() external payable activeAuction whenNotPaused {
-      require(msg.value > ((highestBid * (100 + BID_INCREASE))/100),
+      require(msg.value >= ((highestBid * (100 + BID_INCREASE))/100),
       "does not surpass bid increase");
       highestBid = msg.value; // update highest bid
       _addBidder(msg.sender); // add bidder as existing and update biddersAddresses array
@@ -231,7 +232,7 @@ contract Auction {
    */
   function revealWinner() external view auctionEnded returns (address, uint256){
       uint256 numberOfBids = bids.length;
-      if (numberOfBids > 0))
+      if (numberOfBids > 0)
           {return (bids[numberOfBids - 1].bidder, highestBid);}
       else {revert  NoBidsMade();}
   } // function revealWinner
@@ -256,7 +257,7 @@ contract Auction {
       uint256 numberOfBidders = biddersAddresses.length;
       uint256 _amountToReturn;
       // highestBidder == bids[bids.length-1].bidder
-      for(uint256 i = 0; i < numnberOfBidders; i++){
+      for(uint256 i = 0; i < numberOfBidders; i++){
           address _currentBidder = biddersAddresses[i];
           if (_currentBidder != bids[bids.length-1].bidder){
               bidders[_currentBidder].highestOffer = 0;
@@ -273,8 +274,8 @@ contract Auction {
       }
        // transfer remaining balance to contract owner (== msg.sender)
       uint256 balance = address(this).balance;
-      (bool sent, ) = msg.sender.call{value: balance}("");
-      require(sent, "Withdrawal failed");
+      (bool drained, ) = msg.sender.call{value: balance}("");
+      require(drained, "Withdrawal failed");
       emit AuctionEnded();
   } // function returnDeposits
 
@@ -341,7 +342,7 @@ contract Auction {
     * @notice pauses/unpauses the contract at owner´s decision
     */
   function togglePause() external onlyOwner {
-        paused = !paused;
+        _paused = !_paused;
   }
 
   
