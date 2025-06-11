@@ -363,4 +363,7 @@ contract Auction {
 // - incorported array bids to record all bids, in chronological order
 // - eliminated variable highestBidder, which is now recoverable from the last element of bids.
 // - modified revealWinner() and showOffers() according to the new data structuring
-
+// - in returnDeposits(), funds are transferred using .call, and the returned boolean is analysed with a require
+// - in returnDeposits(), highestBidder == address(0) if and only if there are no bids; no refunds are made in this case
+//   BUT it would be wrong to include a modifier reverting in this case: no bids are perfectly acceptable and should be handled
+//   Our implementation does issue AuctionEnded() event in this situation, as expected, which would not happen with the suggested modifier
