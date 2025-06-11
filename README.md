@@ -10,6 +10,7 @@ Auction contrat showcasing basic data structures.
 - users which place successive bids may get a partial refund from their previous bids, keeping only their latest offer in the contract.
 - when auction deadline is reached, it is possible to reveal the winner, along the winning bid.
 - onece the auction is finished, the owner will proceed to refund all the non-winning offers, retaining a RETURN_DEPOSIT_DISCOUNT (2%). An AuctionEnded() event is emitted.
+- the contract implements the Pausable pattern (Open Zeppelin), which enables an `emergencyWithdraw()` by the `owner` to drain all funds from the contract into its account.
 
 # Dev notes:
 - we use the pattern Iterable Mapping (https://edp.ethkipu.org/modulo-3/estandares-librerias-y-patrones/patrones-de-diseno  item 9), consisting of a `mapping (Key => Value) map` and an associated array `Keys[] keys` to iterate over the `(keys[i],map[keys[i]])` pairs.
@@ -18,13 +19,19 @@ Auction contrat showcasing basic data structures.
    forall address.
       bidders[address].exists <==> Exists i < biddersAddresses.length.   biddersAddresses[i] == address
   ```
-- we build an array `BidderToDisplay[]` with pairs `(bidderAddress, offer)` to show the list of current bidders and their offers, build upon iteration over the keys array `biddersAddresses`.
+- we build an array `bids` with pairs `(bidderAddress, offer)` to show the list of current bidders and their offers, as new bids are placed.
+- the array bids holds the bids placed in chronological order. The following invariants hold
+   ```
+   for all 0 <= i <= bids.length-1. bids[i + 1].offer >= (bids[i].offer * 100 + BID_INCREASE)/100
+      bids[bids.length-1].bidder is the current highest bidder
+      bids[bids.length-1].offer is the current highest offer
+    ```
   
 - `highestBid` holds initially the starting bid set by the contract deployer (`owner`). After the first bid is placed, it holds the highest offer. The following invariant holds:
   ```
   (biddersAddresses.length > 0) ==>
-             [highestBid == bidders[highestBidder].offer
-             && forall address. (highestBid >= bidders[address].offer
-                && activeAuction ==>  bidders[address].deposit >= bidders[address].offer)
+             [highestBid == bidders[highestBidder].highestOffer == bids[bids.length - 1].offer
+             && forall address. (highestBid >= bidders[address].highestOffer
+                && activeAuction ==>  bidders[address].deposit >= bidders[address].highestOffer)
              && address(this).balance >= highestBid]
   ```
